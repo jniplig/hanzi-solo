@@ -13,6 +13,7 @@ from hanzi_trainer import (
     UPLOAD_TYPES,
     apply_exceptions,
     build_document,
+    character_levels,
     decode_setup,
     document_bytes,
     encode_setup,
@@ -21,8 +22,10 @@ from hanzi_trainer import (
     is_hanzi,
     load_known_chars,
     load_levels,
+    passage_report,
     pinyin_per_character,
     projector_page,
+    report_csv,
     worksheet_bundle,
 )
 
@@ -89,6 +92,11 @@ def step(number: int, title: str) -> None:
 @st.cache_data
 def levels_available():
     return load_levels(DATA_FILE)
+
+
+@st.cache_data
+def level_labels_for(systems: tuple):
+    return character_levels(DATA_FILE, list(systems))
 
 
 def _label(ch: str) -> str:
@@ -307,6 +315,55 @@ with right:
         st.markdown(
             '<div class="hs-muted">Shows the fonts only if they are installed on this computer.</div>',
             unsafe_allow_html=True,
+        )
+
+    report = passage_report(
+        passage, known, level_labels_for(tuple(selections)) if selections else {}
+    )
+    st.markdown(
+        '<div class="hs-step" style="margin-top:1.2rem">Passage report</div>',
+        unsafe_allow_html=True,
+    )
+    if not report["total"]:
+        st.markdown(
+            '<div class="hs-muted">No Chinese characters in the passage yet.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        m_text, m_known, m_learn = st.columns(3)
+        m_text.metric(
+            "Text the class can read",
+            f"{report['pct_text']}%",
+            help="Share of all the characters in the passage, counting repeats, that are known.",
+        )
+        m_known.metric(
+            "Different characters known", f"{report['known_distinct']} of {report['distinct']}"
+        )
+        m_learn.metric("Still to learn", report["distinct"] - report["known_distinct"])
+        show_known = st.toggle("Show known characters too", key="report_all")
+        table = [
+            {
+                "Character": r["char"],
+                "Pinyin": r["pinyin"],
+                "Times in passage": r["count"],
+                "Status": "Known" if r["known"] else "To learn",
+                "First taught at": r["level"] or ("not in these lists" if selections else ""),
+            }
+            for r in report["rows"]
+            if show_known or not r["known"]
+        ]
+        if table:
+            st.dataframe(table, hide_index=True, width="stretch")
+        else:
+            st.markdown(
+                '<div class="hs-muted">Every character is known at these levels.</div>',
+                unsafe_allow_html=True,
+            )
+        st.download_button(
+            "Download report (.csv)",
+            data=report_csv(report),
+            file_name="passage_report.csv",
+            mime="text/csv",
         )
 
     st.markdown(

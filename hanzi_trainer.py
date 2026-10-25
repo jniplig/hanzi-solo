@@ -373,6 +373,78 @@ def parse_selections(arg: str) -> dict[str, int]:
     return selections
 
 
+def character_levels(csv_path: Path | str, systems: list[str]) -> dict[str, str]:
+    """{character: "YCT 3"}: the lowest level, across the given word lists,
+    of any word that contains the character."""
+    best: dict[str, tuple[int, int]] = {}
+    with open(csv_path, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            if row["system"] not in systems:
+                continue
+            rank = (int(row["level"]), systems.index(row["system"]))
+            for ch in row["word"]:
+                if is_hanzi(ch) and (ch not in best or rank < best[ch]):
+                    best[ch] = rank
+    return {ch: f"{systems[s]} {lvl}" for ch, (lvl, s) in best.items()}
+
+
+def passage_report(
+    text: str, known: set[str], levels: dict[str, str] | None = None
+) -> dict:
+    """What a passage asks of a class: each distinct character in order of first
+    appearance with its reading(s), how often it occurs, whether the class knows
+    it, and the level that introduces it (from `character_levels`).
+
+    pct_text is the share of all characters in the text that are known (what a
+    reader experiences); pct_distinct the share of different characters.
+    Percentages are None for a passage with no Chinese characters.
+    """
+    counts: dict[str, int] = {}
+    readings: dict[str, list[str]] = {}
+    for line in text.splitlines():
+        for ch, reading in zip(line, pinyin_per_character(line)):
+            if not is_hanzi(ch):
+                continue
+            counts[ch] = counts.get(ch, 0) + 1
+            seen = readings.setdefault(ch, [])
+            if reading and reading not in seen:
+                seen.append(reading)
+    total = sum(counts.values())
+    known_total = sum(n for ch, n in counts.items() if ch in known)
+    known_distinct = sum(1 for ch in counts if ch in known)
+    rows = [
+        {
+            "char": ch,
+            "pinyin": " / ".join(readings[ch]),
+            "count": n,
+            "known": ch in known,
+            "level": (levels or {}).get(ch, ""),
+        }
+        for ch, n in counts.items()
+    ]
+    return {
+        "rows": rows,
+        "total": total,
+        "known_total": known_total,
+        "distinct": len(counts),
+        "known_distinct": known_distinct,
+        "pct_text": round(100 * known_total / total) if total else None,
+        "pct_distinct": round(100 * known_distinct / len(counts)) if counts else None,
+    }
+
+
+def report_csv(report: dict) -> bytes:
+    """The report as a spreadsheet-friendly CSV (UTF-8 with BOM, opens in Excel)."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Character", "Pinyin", "Times in passage", "Status", "First taught at"])
+    for r in report["rows"]:
+        writer.writerow(
+            [r["char"], r["pinyin"], r["count"], "Known" if r["known"] else "To learn", r["level"]]
+        )
+    return buf.getvalue().encode("utf-8-sig")
+
+
 SIZE_RANGE = (18, 48)
 RUBY_RANGE = (8, 18)
 

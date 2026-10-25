@@ -12,6 +12,7 @@ from hanzi_trainer import (
     apply_exceptions,
     build_answer_key,
     build_document,
+    character_levels,
     decode_setup,
     document_bytes,
     encode_setup,
@@ -20,8 +21,10 @@ from hanzi_trainer import (
     load_levels,
     main,
     parse_selections,
+    passage_report,
     pinyin_per_character,
     projector_page,
+    report_csv,
     worksheet_bundle,
 )
 
@@ -343,3 +346,47 @@ def test_decode_empty_and_none_selection():
     assert decode_setup({}, LEVELS) == {}
     assert decode_setup({"lists": "-"}, LEVELS) == {"selections": {}}
     assert decode_setup({"lists": "nonsense"}, LEVELS) == {}
+
+
+# --- passage report ---------------------------------------------------------------------
+
+
+def test_report_counts_and_percentages():
+    report = passage_report("你你龙,abc。", {"你"})
+    assert (report["total"], report["known_total"]) == (3, 2)
+    assert (report["distinct"], report["known_distinct"]) == (2, 1)
+    assert (report["pct_text"], report["pct_distinct"]) == (67, 50)
+    assert [(r["char"], r["count"], r["known"]) for r in report["rows"]] == [
+        ("你", 2, True),
+        ("龙", 1, False),
+    ]
+
+
+def test_report_lists_every_reading_of_a_character():
+    report = passage_report("银行\n他行不行", set())
+    row = next(r for r in report["rows"] if r["char"] == "行")
+    assert row["pinyin"] == "háng / xíng" and row["count"] == 3
+
+
+def test_report_for_text_without_chinese():
+    report = passage_report("hello 123", set())
+    assert report["rows"] == [] and report["pct_text"] is None and report["pct_distinct"] is None
+
+
+def test_character_levels_use_the_lowest_level_and_first_list():
+    levels = character_levels(DATA_FILE, ["YCT", "HSK3.0"])
+    assert levels["你"] == "YCT 1"  # in both lists at level 1: the first list given wins
+    assert character_levels(DATA_FILE, []) == {}
+    assert all(label.split()[0] in ("YCT", "HSK3.0") for label in levels.values())
+
+
+def test_report_levels_flow_into_rows_and_csv():
+    levels = character_levels(DATA_FILE, ["YCT"])
+    report = passage_report("你龙", {"你"}, levels)
+    assert report["rows"][0]["level"] == "YCT 1"
+    data = report_csv(report)
+    assert data.startswith(b"\xef\xbb\xbf")  # BOM so Excel reads the Chinese correctly
+    rows = list(__import__("csv").reader(data.decode("utf-8-sig").splitlines()))
+    assert rows[0] == ["Character", "Pinyin", "Times in passage", "Status", "First taught at"]
+    assert rows[1][:5] == ["你", "nǐ", "1", "Known", "YCT 1"]
+    assert rows[2][3] == "To learn"

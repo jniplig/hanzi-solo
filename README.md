@@ -61,6 +61,15 @@ Text files may be UTF-8 or GB18030. PDFs are not supported, because text pulled
 out of a PDF is unreliable; scanned pages need to be typed or pasted. Uploads
 are limited to 5 MB and are not stored.
 
+## Passage report
+
+Under the preview, the report shows how much of the passage the class can read
+(counting every character, repeats included), how many different characters are
+known, and a table of the characters still to learn: pinyin (every reading, for
+characters like 行), how many times each appears, and the level that first
+teaches it. A toggle adds the known characters, and the table downloads as a CSV
+that opens in Excel.
+
 ## Class set-ups
 
 The page address always holds the current set-up: word lists and levels,
