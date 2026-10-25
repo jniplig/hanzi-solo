@@ -150,6 +150,10 @@ options = dict(
     size_pt=size_pt,
     ruby_pt=ruby_pt,
 )
+st.caption(
+    "The zip holds the student worksheet and a teacher answer key: "
+    "the same passage with pinyin on every character."
+)
 st.download_button(
     "Download worksheet (.docx)",
     data=document_bytes(build_document(passage, known, **options)),
@@ -161,5 +165,4 @@ st.download_button(
     data=worksheet_bundle(passage, known, **options),
     file_name="worksheet_and_answer_key.zip",
     mime="application/zip",
-    help="The answer key is the same passage with pinyin on every character.",
 )
