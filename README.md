@@ -20,6 +20,8 @@ or `--mode` on the command line:
   characters switch to a plain font. This only works where that font is
   installed, and characters typed into the worksheet later also get pinyin.
 
+**Try it online:** https://7enwlsu582hhgidpovckm3.streamlit.app/ (free, nothing is stored).
+
 ## Quick start
 
 ```bash
