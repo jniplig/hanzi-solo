@@ -157,6 +157,11 @@ pytest
 The app is a plain Streamlit app with `app.py` as the entry point, so it can run
 on Streamlit Community Cloud straight from a GitHub repository.
 
+Each push to `main` redeploys automatically. `app.py` reloads `hanzi_trainer.py`
+on every run, so a deploy that changes both files cannot leave the app stuck on
+an old copy of the module. If the app ever shows an error after a deploy that a
+refresh does not clear, use "Manage app" then "Reboot app" on Streamlit.
+
 ## Licence
 
 MIT for the code (see `LICENSE`). Data sources and font notes are in `NOTICE.md`.

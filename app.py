@@ -1,10 +1,18 @@
 """Streamlit front end for Hanzi Solo."""
 import html
+import importlib
 import os
 
 import streamlit as st
 
-from hanzi_trainer import (
+import hanzi_trainer
+
+# On Streamlit Cloud a deploy can load a new app.py next to a stale cached copy
+# of hanzi_trainer.py (an ImportError until the app is rebooted). Reloading the
+# small module on every run makes the two always match.
+importlib.reload(hanzi_trainer)
+
+from hanzi_trainer import (  # noqa: E402
     DATA_FILE,
     MODE_FONT,
     MODE_PINYIN,
