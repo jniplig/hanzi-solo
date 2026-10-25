@@ -373,6 +373,72 @@ def parse_selections(arg: str) -> dict[str, int]:
     return selections
 
 
+SIZE_RANGE = (18, 48)
+RUBY_RANGE = (8, 18)
+
+
+def encode_setup(
+    selections: dict[str, int],
+    show: str = "",
+    hide: str = "",
+    mode: str = MODE_PINYIN,
+    size_pt: int = 28,
+    ruby_pt: int = 12,
+    plain_font: str = PLAIN_FONT,
+    ruby_font: str = RUBY_FONT,
+) -> dict[str, str]:
+    """A class set-up as short URL query parameters (settings left at their
+    default are left out). The passage is deliberately not part of it."""
+    params = {"lists": ",".join(f"{s}:{n}" for s, n in selections.items()) or "-"}
+    for name, chars in (("show", show), ("hide", hide)):
+        chars = "".join(sorted(hanzi_in(chars)))
+        if chars:
+            params[name] = chars
+    for name, value, default in (
+        ("mode", mode, MODE_PINYIN),
+        ("size", size_pt, 28),
+        ("psize", ruby_pt, 12),
+        ("cfont", plain_font, PLAIN_FONT),
+        ("rfont", ruby_font, RUBY_FONT),
+    ):
+        if value != default:
+            params[name] = str(value)
+    return params
+
+
+def _bounded_int(text: str, low: int, high: int) -> int | None:
+    return min(max(int(text), low), high) if text.strip().isdigit() else None
+
+
+def decode_setup(params: dict[str, str], levels: dict[str, int]) -> dict:
+    """The valid parts of a set-up from URL parameters; anything unknown,
+    malformed or out of range is ignored. `levels` is {system: top level}."""
+    out: dict = {}
+    if "lists" in params:
+        selections: dict[str, int] = {}
+        for part in params["lists"].split(","):
+            system, _, level = part.partition(":")
+            level_n = _bounded_int(level, 1, levels.get(system, 0)) if system in levels else None
+            if level_n is not None:
+                selections[system] = level_n
+        if selections or params["lists"].strip() == "-":
+            out["selections"] = selections
+    for name in ("show", "hide"):
+        if name in params:
+            out[name] = "".join(sorted(hanzi_in(params[name])))
+    if params.get("mode") in (MODE_PINYIN, MODE_FONT):
+        out["mode"] = params["mode"]
+    for name, key, (low, high) in (("size", "size_pt", SIZE_RANGE), ("psize", "ruby_pt", RUBY_RANGE)):
+        value = _bounded_int(params.get(name, ""), low, high)
+        if value is not None:
+            out[key] = value
+    for name, key in (("cfont", "plain_font"), ("rfont", "ruby_font")):
+        font = params.get(name, "").strip()[:60]
+        if font:
+            out[key] = font
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("levels", help="e.g. 'YCT=3,HSK3.0=1' (up to and including)")

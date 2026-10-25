@@ -2,7 +2,6 @@
 import html
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from hanzi_trainer import (
     DATA_FILE,
@@ -14,7 +13,9 @@ from hanzi_trainer import (
     UPLOAD_TYPES,
     apply_exceptions,
     build_document,
+    decode_setup,
     document_bytes,
+    encode_setup,
     extract_text,
     hanzi_in,
     is_hanzi,
@@ -94,15 +95,40 @@ def _label(ch: str) -> str:
     return f"{ch}  {pinyin_per_character(ch)[0]}"
 
 
-def _pick(label: str, key: str, options: list[str], help_text: str) -> str:
-    # Drop earlier picks that are no longer on offer (passage or level changed).
-    st.session_state[key] = [c for c in st.session_state.get(key, []) if c in options]
+def _pick(label: str, key: str, options: set[str], valid, help_text: str) -> str:
+    # Saved picks stay (so a class set-up works with any passage) as long as the
+    # chosen levels still make them a sensible exception.
+    saved = [c for c in st.session_state.get(key, []) if valid(c)]
+    st.session_state[key] = saved
     return "".join(
-        st.multiselect(label, options, key=key, format_func=_label, help=help_text)
+        st.multiselect(
+            label, sorted(options | set(saved)), key=key, format_func=_label, help=help_text
+        )
     )
 
 
 levels = levels_available()
+
+# First visit: take the class set-up from the page address, if there is one.
+st.session_state.setdefault("lists", ["YCT"] if "YCT" in levels else [])
+st.session_state.setdefault("mode", MODE_PINYIN)
+st.session_state.setdefault("size_pt", 28)
+st.session_state.setdefault("ruby_pt", 12)
+st.session_state.setdefault("plain_font", PLAIN_FONT)
+st.session_state.setdefault("ruby_font", RUBY_FONT)
+if "_setup_loaded" not in st.session_state:
+    st.session_state["_setup_loaded"] = True
+    saved_setup = decode_setup(dict(st.query_params), levels)
+    if "selections" in saved_setup:
+        st.session_state["lists"] = list(saved_setup["selections"])
+        for system, level in saved_setup["selections"].items():
+            st.session_state[f"level_{system}"] = level
+    for name in ("show", "hide"):
+        if name in saved_setup:
+            st.session_state[f"{name}_pinyin"] = list(saved_setup[name])
+    for name in ("mode", "size_pt", "ruby_pt", "plain_font", "ruby_font"):
+        if name in saved_setup:
+            st.session_state[name] = saved_setup[name]
 left, right = st.columns([5, 7], gap="large")
 
 # ---- left: the three steps -------------------------------------------------------
@@ -112,11 +138,13 @@ with left:
         chosen = st.multiselect(
             "Word lists",
             list(levels),
-            default=["YCT"] if "YCT" in levels else [],
+            key="lists",
             help="HSK3.0 and HSK3.0-2026 level 7 covers bands 7-9.",
         )
         selections = {
-            system: st.slider(f"{system}: include up to level", 1, levels[system], 1)
+            system: st.slider(
+                f"{system}: include up to level", 1, levels[system], key=f"level_{system}"
+            )
             for system in chosen
         }
         level_known = load_known_chars(DATA_FILE, selections) if selections else set()
@@ -154,13 +182,15 @@ with left:
         show_pinyin = _pick(
             "Always show pinyin for",
             "show_pinyin",
-            sorted(hanzi & level_known),
+            hanzi & level_known,
+            lambda c: c in level_known,
             "Characters the chosen levels would hide, but you want pinyin on.",
         )
         hide_pinyin = _pick(
             "Never show pinyin for",
             "hide_pinyin",
-            sorted(hanzi - level_known),
+            hanzi - level_known,
+            lambda c: c not in level_known,
             "Characters above the chosen levels that your class already knows.",
         )
 
@@ -170,16 +200,27 @@ with left:
             MODE_PINYIN: "Write the pinyin into the worksheet (no font needed)",
             MODE_FONT: "Use an installed pinyin font such as FZKTPY",
         }
-        mode = st.radio("Pinyin", list(MODE_LABELS), format_func=MODE_LABELS.get)
-        plain_font = st.text_input("Character font", PLAIN_FONT)
-        size_pt = st.slider("Character size (pt)", 18, 48, 28)
+        mode = st.radio("Pinyin", list(MODE_LABELS), format_func=MODE_LABELS.get, key="mode")
+        plain_font = st.text_input("Character font", key="plain_font")
+        size_pt = st.slider("Character size (pt)", 18, 48, key="size_pt")
         if mode == MODE_PINYIN:
-            ruby_font = st.text_input("Pinyin font", RUBY_FONT)
-            ruby_pt = st.slider("Pinyin size (pt)", 8, 18, 12)
+            ruby_font = st.text_input("Pinyin font", key="ruby_font")
+            ruby_pt = st.slider("Pinyin size (pt)", 8, 18, key="ruby_pt")
         else:
             pinyin_font = st.text_input("Font that shows pinyin", PINYIN_FONT)
 
+    st.markdown(
+        '<div class="hs-muted">This set-up (levels, exceptions, sizes, fonts) is kept in the '
+        "page address, never the passage. Bookmark the page to reopen this class.</div>",
+        unsafe_allow_html=True,
+    )
+
 known = apply_exceptions(level_known, show_pinyin, hide_pinyin)
+setup_params = encode_setup(
+    selections, show_pinyin, hide_pinyin, mode, size_pt, ruby_pt, plain_font, ruby_font
+)
+if dict(st.query_params) != setup_params:
+    st.query_params.from_dict(setup_params)
 options = dict(
     mode=mode,
     pinyin_font=pinyin_font,
@@ -274,7 +315,7 @@ with right:
         "characters stays visible; the space bar reveals the rest.</div>",
         unsafe_allow_html=True,
     )
-    components.html(projector_page(passage, known, plain_font, ruby_font), height=460)
+    st.iframe(projector_page(passage, known, plain_font, ruby_font), height=460)
 
 st.markdown(
     '<div class="hs-foot">Open source, MIT licence. Nothing you paste is stored. '

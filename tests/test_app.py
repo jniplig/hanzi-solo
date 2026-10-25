@@ -64,3 +64,32 @@ def test_stale_picks_are_dropped_when_levels_change():
     at.slider[0].set_value(4).run()
     assert not at.exception
     assert at.multiselect(key="hide_pinyin").value == []
+
+
+def test_setup_is_read_from_the_page_address():
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.query_params["lists"] = "YCT:3"
+    at.query_params["size"] = "36"
+    at.run()
+    assert not at.exception
+    assert at.multiselect[0].value == ["YCT"]
+    assert at.slider[0].value == 3
+    assert at.slider(key="size_pt").value == 36
+
+
+def test_exceptions_are_read_from_the_page_address():
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.query_params["lists"] = "YCT:1"
+    at.query_params["hide"] = "京北"
+    at.run()
+    assert not at.exception
+    assert set(at.multiselect(key="hide_pinyin").value) == {"北", "京"}
+    # At YCT 1 the sample has three characters with pinyin (也 北 京); two are hidden.
+    assert "20 without pinyin, 1 with pinyin" in at.caption[0].value
+
+
+def test_changes_are_written_back_to_the_address():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.multiselect[0].set_value(["YCT"]).run()
+    at.slider[0].set_value(2).run()
+    assert "YCT:2" in str(at.query_params["lists"])

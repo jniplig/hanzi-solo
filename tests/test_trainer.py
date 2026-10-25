@@ -12,7 +12,9 @@ from hanzi_trainer import (
     apply_exceptions,
     build_answer_key,
     build_document,
+    decode_setup,
     document_bytes,
+    encode_setup,
     extract_text,
     load_known_chars,
     load_levels,
@@ -300,3 +302,44 @@ def test_projector_page_escapes_and_keeps_lines():
     assert "&lt;b&gt;" in page
     assert page.count("<br>") == 2
     assert '"Ax"' in page  # unsafe characters stripped from the font name
+
+
+# --- class set-ups in the URL ---------------------------------------------------------
+
+LEVELS = load_levels(DATA_FILE)
+
+
+def test_encode_leaves_out_defaults_and_the_passage():
+    assert encode_setup({"YCT": 3}) == {"lists": "YCT:3"}
+    assert encode_setup({}) == {"lists": "-"}
+    params = encode_setup({"YCT": 2, "HSK3.0": 1}, show="老师a", hide="北京", mode="font", size_pt=36,
+                          plain_font="STKaiti")
+    assert params == {"lists": "YCT:2,HSK3.0:1", "show": "师老", "hide": "京北", "mode": "font",
+                      "size": "36", "cfont": "STKaiti"}
+
+
+def test_setup_roundtrips():
+    original = dict(selections={"YCT": 4, "HSK2.0": 2}, show="老", hide="龙京", mode="font",
+                    size_pt=40, ruby_pt=9, plain_font="STKaiti", ruby_font="Calibri")
+    params = encode_setup(original["selections"], original["show"], original["hide"], original["mode"],
+                          original["size_pt"], original["ruby_pt"], original["plain_font"], original["ruby_font"])
+    decoded = decode_setup(params, LEVELS)
+    assert decoded["selections"] == original["selections"]
+    assert decoded["show"] == "老" and decoded["hide"] == "京龙"
+    assert (decoded["mode"], decoded["size_pt"], decoded["ruby_pt"]) == ("font", 40, 9)
+    assert (decoded["plain_font"], decoded["ruby_font"]) == ("STKaiti", "Calibri")
+
+
+def test_decode_ignores_garbage_and_clamps():
+    decoded = decode_setup(
+        {"lists": "YCT:99,NOPE:1,HSK3.0:x,HSK2.0:0", "mode": "evil", "size": "9999", "psize": "abc",
+         "show": "abc<script>老", "cfont": "  "},
+        LEVELS,
+    )
+    assert decoded == {"selections": {"YCT": LEVELS["YCT"], "HSK2.0": 1}, "show": "老", "size_pt": 48}
+
+
+def test_decode_empty_and_none_selection():
+    assert decode_setup({}, LEVELS) == {}
+    assert decode_setup({"lists": "-"}, LEVELS) == {"selections": {}}
+    assert decode_setup({"lists": "nonsense"}, LEVELS) == {}

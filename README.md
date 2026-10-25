@@ -61,6 +61,15 @@ Text files may be UTF-8 or GB18030. PDFs are not supported, because text pulled
 out of a PDF is unreliable; scanned pages need to be typed or pasted. Uploads
 are limited to 5 MB and are not stored.
 
+## Class set-ups
+
+The page address always holds the current set-up: word lists and levels,
+exceptions, pinyin mode, sizes and fonts. Bookmark the page to reopen a class
+exactly as you left it, or send the link to a colleague. The passage is never in
+the address, so a link carries no lesson text or student material. Exceptions
+stay with the class when you change passages, as long as the chosen levels still
+make them sensible.
+
 ## Presenting in class
 
 Under the preview, "Present to the class" shows the passage in large type for a
