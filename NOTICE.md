@@ -11,7 +11,14 @@
 - The licence terms of the YCT source have not been confirmed. If you are a
   rights holder and want the YCT data removed or changed, please open an issue.
 
+## Pinyin
+
+Pinyin in the default mode is generated with pypinyin
+(https://github.com/mozillazg/python-pinyin, MIT licence), installed as a
+dependency and not bundled in this repository.
+
 ## Fonts
 
-FZKTPY is a proprietary font and is NOT included. Users must install their own
-licensed copy. Worksheets reference the font by name only.
+The default mode needs no special font. In the optional font mode, FZKTPY is a
+proprietary font and is NOT included. Users must install their own licensed
+copy. Worksheets reference fonts by name only.

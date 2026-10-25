@@ -20,6 +20,15 @@ def test_level_selection_changes_caption():
     assert "0 with pinyin" in at.caption[0].value
 
 
+def test_both_modes_run_without_errors():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    assert at.radio[0].value == "pinyin"  # the no-font mode is the default
+    at.radio[0].set_value("font").run()
+    assert not at.exception
+    at.radio[0].set_value("pinyin").run()
+    assert not at.exception
+
+
 def test_no_selection_keeps_pinyin_everywhere():
     at = AppTest.from_file(APP, default_timeout=30).run()
     at.multiselect[0].set_value([]).run()
