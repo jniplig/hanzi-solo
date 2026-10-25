@@ -266,6 +266,85 @@ def build_answer_key(text: str, **kwargs) -> Document:
     return build_document(text, set(), **kwargs)
 
 
+_PROJECTOR_CSS = """
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif}
+#stage{background:#fff;color:#111;min-height:100vh;display:flex;flex-direction:column}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;
+  border-bottom:1px solid #ddd;font-size:14px}
+.bar button{font:inherit;padding:9px 14px;border:1px solid #bbb;border-radius:8px;
+  background:#fafafa;cursor:pointer;min-height:40px}
+.bar button:hover{background:#eee}
+.bar .hint{color:#555;margin-left:auto}
+#text{flex:1;padding:4vmin 6vmin;line-height:2.5;font-family:%(plain)s,"Noto Serif SC",serif}
+ruby rt{font-family:%(ruby)s,sans-serif;font-size:.38em;color:#1a2a5c}
+ruby rt.k{visibility:hidden}
+.reveal ruby rt.k{visibility:visible;color:#6b6b6b}
+#stage:fullscreen .bar{opacity:.3}
+#stage:fullscreen .bar:hover{opacity:1}
+"""
+
+_PROJECTOR_JS = """
+const stage=document.getElementById('stage'),text=document.getElementById('text'),
+  note=document.getElementById('note'),rv=document.getElementById('rv');
+let size=7;
+function paint(){text.style.fontSize=size+'vmin'}
+function reveal(){const on=stage.classList.toggle('reveal');
+  rv.textContent=on?'Hide known pinyin':'Show all pinyin'}
+document.getElementById('fs').onclick=()=>{
+  if(document.fullscreenElement){document.exitFullscreen();return}
+  (stage.requestFullscreen?stage.requestFullscreen():Promise.reject())
+    .catch(()=>{note.textContent='This browser blocked full screen. Try F11 instead.'})};
+document.getElementById('sm').onclick=()=>{size=Math.max(3,size-1);paint()};
+document.getElementById('lg').onclick=()=>{size=Math.min(16,size+1);paint()};
+rv.onclick=reveal;
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();reveal()}});
+paint();
+"""
+
+
+def _css_font(name: str) -> str:
+    """A font name that is safe inside a CSS font-family declaration."""
+    cleaned = "".join(c for c in name if c.isalnum() or c in " -_")
+    return f'"{cleaned}"' if cleaned else "serif"
+
+
+def projector_page(
+    text: str, known: set[str], plain_font: str = PLAIN_FONT, ruby_font: str = RUBY_FONT
+) -> str:
+    """A self-contained HTML page for showing the passage on a projector.
+
+    Unknown characters carry pinyin. Known characters carry hidden pinyin that
+    a button (or the space bar) reveals. A button opens the page full screen.
+    """
+    lines = []
+    for line in text.splitlines() or [""]:
+        parts = []
+        for ch, reading in zip(line, pinyin_per_character(line)):
+            if reading and is_hanzi(ch):
+                cls = ' class="k"' if ch in known else ""
+                parts.append(
+                    f"<ruby>{escape(ch)}<rt{cls}>{escape(reading)}</rt></ruby>"
+                )
+            else:
+                parts.append(escape(ch))
+        lines.append("".join(parts) or "&nbsp;")
+    css = _PROJECTOR_CSS % {"plain": _css_font(plain_font), "ruby": _css_font(ruby_font)}
+    return (
+        '<!doctype html><html lang="zh"><head><meta charset="utf-8">'
+        f"<style>{css}</style></head><body>"
+        '<div id="stage"><div class="bar">'
+        '<button id="fs" type="button">Full screen</button>'
+        '<button id="sm" type="button" aria-label="Smaller text">A&minus;</button>'
+        '<button id="lg" type="button" aria-label="Larger text">A+</button>'
+        '<button id="rv" type="button">Show all pinyin</button>'
+        '<span class="hint" id="note">Space shows or hides the known pinyin.</span></div>'
+        f'<div id="text">{"<br>".join(lines)}</div></div>'
+        f"<script>{_PROJECTOR_JS}</script></body></html>"
+    )
+
+
 def worksheet_bundle(text: str, known: set[str], **kwargs) -> bytes:
     """A zip holding student_worksheet.docx and teacher_answer_key.docx."""
     import zipfile

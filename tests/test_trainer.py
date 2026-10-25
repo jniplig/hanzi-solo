@@ -19,6 +19,7 @@ from hanzi_trainer import (
     main,
     parse_selections,
     pinyin_per_character,
+    projector_page,
     worksheet_bundle,
 )
 
@@ -276,3 +277,26 @@ def test_extract_text_rejects_bad_files():
         extract_text("a.docx", b"not a zip")
     with pytest.raises(ValueError, match="encoding"):
         extract_text("a.txt", b"\xff\xfe\xfa\x81")
+
+
+# --- projector page ---------------------------------------------------------------
+
+
+def test_projector_page_marks_known_pinyin_as_hidden():
+    page = projector_page("你龙", {"你"})
+    assert '<ruby>你<rt class="k">nǐ</rt></ruby>' in page  # known: hidden until revealed
+    assert "<ruby>龙<rt>lóng</rt></ruby>" in page  # unknown: always shown
+
+
+def test_projector_page_has_fullscreen_and_reveal_controls():
+    page = projector_page("你", set())
+    for needle in ('id="fs"', "requestFullscreen", 'id="rv"', "Show all pinyin"):
+        assert needle in page
+
+
+def test_projector_page_escapes_and_keeps_lines():
+    page = projector_page("你<b>\n\n龙", set(), plain_font='A";}x', ruby_font="Arial")
+    assert "<b>" not in page.split('id="text"')[1].split("</div>")[0]
+    assert "&lt;b&gt;" in page
+    assert page.count("<br>") == 2
+    assert '"Ax"' in page  # unsafe characters stripped from the font name

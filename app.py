@@ -2,6 +2,7 @@
 import html
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from hanzi_trainer import (
     DATA_FILE,
@@ -20,6 +21,7 @@ from hanzi_trainer import (
     load_known_chars,
     load_levels,
     pinyin_per_character,
+    projector_page,
     worksheet_bundle,
 )
 
@@ -265,6 +267,14 @@ with right:
             '<div class="hs-muted">Shows the fonts only if they are installed on this computer.</div>',
             unsafe_allow_html=True,
         )
+
+    st.markdown(
+        '<div class="hs-step" style="margin-top:1.2rem">Present to the class</div>'
+        '<div class="hs-muted">Full screen for a projector. Pinyin on unknown '
+        "characters stays visible; the space bar reveals the rest.</div>",
+        unsafe_allow_html=True,
+    )
+    components.html(projector_page(passage, known, plain_font, ruby_font), height=460)
 
 st.markdown(
     '<div class="hs-foot">Open source, MIT licence. Nothing you paste is stored. '

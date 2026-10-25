@@ -61,6 +61,14 @@ Text files may be UTF-8 or GB18030. PDFs are not supported, because text pulled
 out of a PDF is unreliable; scanned pages need to be typed or pasted. Uploads
 are limited to 5 MB and are not stored.
 
+## Presenting in class
+
+Under the preview, "Present to the class" shows the passage in large type for a
+projector. Press **Full screen** (Esc leaves it), change the size with **A-**
+and **A+**, and press **Space** or "Show all pinyin" to reveal the pinyin on the
+characters the class is expected to know. It uses the same levels and exceptions
+as the worksheet.
+
 ## Fonts
 
 In the default pinyin mode no font needs installing. The worksheet names two
