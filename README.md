@@ -52,6 +52,15 @@ python hanzi_trainer.py "YCT=3" passage.txt \
 is the same passage with pinyin on every character. In the app, one button
 downloads the student worksheet and the answer key together as a zip.
 
+## Uploading a passage
+
+In the app, upload a Word (`.docx`) or text (`.txt`) file instead of pasting. The
+text lands in the passage box, where you can still edit it. Pinyin already in a
+Word file is ignored, so a worksheet made by this tool can be uploaded again.
+Text files may be UTF-8 or GB18030. PDFs are not supported, because text pulled
+out of a PDF is unreliable; scanned pages need to be typed or pasted. Uploads
+are limited to 5 MB and are not stored.
+
 ## Fonts
 
 In the default pinyin mode no font needs installing. The worksheet names two

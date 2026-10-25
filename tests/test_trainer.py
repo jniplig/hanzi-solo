@@ -13,6 +13,7 @@ from hanzi_trainer import (
     build_answer_key,
     build_document,
     document_bytes,
+    extract_text,
     load_known_chars,
     load_levels,
     main,
@@ -234,3 +235,44 @@ def test_cli_exceptions_and_answer_key(tmp_path):
                  "--hide-pinyin", "龙", "--answer-key", str(key)]) == 0
     assert _ruby_pairs(Document(str(out))) == [("你", "nǐ")]
     assert len(_ruby_pairs(Document(str(key)))) == 2
+
+
+# --- file upload ----------------------------------------------------------------
+
+
+def test_extract_text_reads_utf8_bom_and_gb18030():
+    assert extract_text("a.txt", "你好".encode("utf-8")) == "你好"
+    assert extract_text("a.TXT", "你好".encode("utf-8-sig")) == "你好"
+    assert extract_text("a.txt", "你好,我是老师".encode("gb18030")) == "你好,我是老师"
+
+
+def test_extract_text_from_plain_docx():
+    doc = Document()
+    doc.add_paragraph("你好")
+    doc.add_paragraph("我是老师")
+    assert extract_text("a.docx", document_bytes(doc)) == "你好\n我是老师"
+
+
+def test_extract_text_reads_tables():
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    table.cell(0, 0).text = "表格里的字"
+    assert "表格里的字" in extract_text("a.docx", document_bytes(doc))
+
+
+def test_extract_text_roundtrips_our_own_worksheet():
+    # The pinyin (ruby text) must not come back as extra letters.
+    sheet = build_document("龙你好\n明天", {"你"})
+    assert _ruby_pairs(sheet)  # it does contain pinyin
+    assert extract_text("w.docx", document_bytes(sheet)) == "龙你好\n明天"
+
+
+def test_extract_text_rejects_bad_files():
+    with pytest.raises(ValueError, match="txt or .docx"):
+        extract_text("a.pdf", b"%PDF")
+    with pytest.raises(ValueError, match="txt or .docx"):
+        extract_text("noextension", b"x")
+    with pytest.raises(ValueError, match="Word file"):
+        extract_text("a.docx", b"not a zip")
+    with pytest.raises(ValueError, match="encoding"):
+        extract_text("a.txt", b"\xff\xfe\xfa\x81")

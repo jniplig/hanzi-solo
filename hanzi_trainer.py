@@ -97,6 +97,38 @@ def apply_exceptions(
     return (known - show) | hide
 
 
+UPLOAD_TYPES = ("txt", "docx")
+
+
+def extract_text(filename: str, data: bytes) -> str:
+    """Passage text from an uploaded .txt or .docx file.
+
+    .txt may be UTF-8 or GB18030 (common for Chinese files). In .docx, pinyin
+    annotations (ruby text) are skipped, so a worksheet made by this tool can
+    be uploaded again and gives back only the characters. Raises ValueError
+    for an unsupported or unreadable file.
+    """
+    suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if suffix == "txt":
+        for encoding in ("utf-8-sig", "gb18030"):
+            try:
+                return data.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        raise ValueError("Could not read the text file's encoding.")
+    if suffix == "docx":
+        try:
+            doc = Document(io.BytesIO(data))
+        except Exception as err:
+            raise ValueError("Could not open the Word file.") from err
+        lines = [
+            "".join(p.xpath(".//w:t[not(ancestor::w:rt)]/text()"))
+            for p in doc.element.body.iter(qn("w:p"))
+        ]
+        return "\n".join(lines)
+    raise ValueError("Please upload a .txt or .docx file.")
+
+
 def _set_font(run, name: str, size_pt: int) -> None:
     run.font.size = Pt(size_pt)
     run.font.name = name

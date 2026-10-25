@@ -10,9 +10,11 @@ from hanzi_trainer import (
     PINYIN_FONT,
     PLAIN_FONT,
     RUBY_FONT,
+    UPLOAD_TYPES,
     apply_exceptions,
     build_document,
     document_bytes,
+    extract_text,
     hanzi_in,
     is_hanzi,
     load_known_chars,
@@ -49,7 +51,24 @@ selections = {
     for system in chosen
 }
 
-passage = st.text_area("Passage", value=SAMPLE, height=180)
+st.session_state.setdefault("passage", SAMPLE)
+uploaded = st.file_uploader(
+    "Upload a passage (optional)",
+    type=list(UPLOAD_TYPES),
+    help="Word (.docx) or text (.txt). The text appears below, where you can edit it.",
+)
+if uploaded is not None and st.session_state.get("_loaded_file") != uploaded.file_id:
+    try:
+        text = extract_text(uploaded.name, uploaded.getvalue())
+    except ValueError as err:
+        st.error(str(err))
+    else:
+        st.session_state["_loaded_file"] = uploaded.file_id
+        if text.strip():
+            st.session_state["passage"] = text
+        else:
+            st.warning("No text found in that file. Scanned pages need to be typed or pasted.")
+passage = st.text_area("Passage", height=180, key="passage")
 
 MODE_LABELS = {
     MODE_PINYIN: "Write the pinyin into the worksheet (no font needed)",
