@@ -67,25 +67,37 @@ with st.expander("Fonts and sizes"):
     else:
         pinyin_font = st.text_input("Font that shows pinyin", PINYIN_FONT)
 
-with st.expander("Exceptions: pick characters by hand"):
-    show_pinyin = st.text_input(
-        "Always show pinyin for",
-        key="show_pinyin",
-        help="Characters at the chosen levels that you still want pinyin on.",
-    )
-    hide_pinyin = st.text_input(
-        "Never show pinyin for",
-        key="hide_pinyin",
-        help="Characters above the chosen levels that the class already knows.",
+hanzi = hanzi_in(passage)
+level_known = load_known_chars(DATA_FILE, selections) if selections else set()
+
+
+def _label(ch: str) -> str:
+    return f"{ch}  {pinyin_per_character(ch)[0]}"
+
+
+def _pick(label: str, key: str, options: list[str], help_text: str) -> str:
+    # Drop earlier picks that are no longer on offer (passage or level changed).
+    st.session_state[key] = [c for c in st.session_state.get(key, []) if c in options]
+    return "".join(
+        st.multiselect(label, options, key=key, format_func=_label, help=help_text)
     )
 
-known = load_known_chars(DATA_FILE, selections) if selections else set()
-try:
-    known = apply_exceptions(known, show_pinyin, hide_pinyin)
-except ValueError as err:
-    st.error(f"{err}. Remove each from one of the two boxes.")
-    st.stop()
-hanzi = hanzi_in(passage)
+
+with st.expander("Exceptions: pick characters by hand"):
+    show_pinyin = _pick(
+        "Always show pinyin for",
+        "show_pinyin",
+        sorted(hanzi & level_known),
+        "Characters the chosen levels would hide, but you want pinyin on.",
+    )
+    hide_pinyin = _pick(
+        "Never show pinyin for",
+        "hide_pinyin",
+        sorted(hanzi - level_known),
+        "Characters above the chosen levels that your class already knows.",
+    )
+
+known = apply_exceptions(level_known, show_pinyin, hide_pinyin)
 switched = hanzi & known
 st.caption(
     f"{len(hanzi)} different characters in the passage: "

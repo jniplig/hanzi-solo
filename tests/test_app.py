@@ -41,13 +41,26 @@ def test_exceptions_change_the_caption():
     at.multiselect[0].set_value(["YCT"]).run()
     at.slider[0].set_value(4).run()
     assert "0 with pinyin" in at.caption[0].value
-    at.text_input(key="show_pinyin").set_value("你").run()  # force pinyin on 你
+    # 你 is known at this level, so it is offered under "Always show pinyin".
+    at.multiselect(key="show_pinyin").set_value(["你"]).run()
     assert not at.exception
     assert "1 with pinyin" in at.caption[0].value
 
 
-def test_clashing_exceptions_show_an_error():
+def test_hide_list_offers_unknown_characters_and_applies_them():
     at = AppTest.from_file(APP, default_timeout=30).run()
-    at.text_input(key="show_pinyin").set_value("龙").run()
-    at.text_input(key="hide_pinyin").set_value("龙").run()
-    assert at.error and "龙" in at.error[0].value
+    at.multiselect[0].set_value([]).run()  # nothing known yet
+    assert "你  nǐ" in at.multiselect(key="hide_pinyin").options
+    at.multiselect(key="hide_pinyin").set_value(["你"]).run()
+    assert not at.exception
+    assert "1 without pinyin" in at.caption[0].value
+
+
+def test_stale_picks_are_dropped_when_levels_change():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.multiselect[0].set_value([]).run()
+    at.multiselect(key="hide_pinyin").set_value(["你"]).run()
+    at.multiselect[0].set_value(["YCT"]).run()  # 你 is now known, not offered
+    at.slider[0].set_value(4).run()
+    assert not at.exception
+    assert at.multiselect(key="hide_pinyin").value == []
