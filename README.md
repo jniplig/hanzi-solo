@@ -38,6 +38,18 @@ python hanzi_trainer.py "YCT=3,HSK3.0=1" passage.txt -o worksheet.docx
 python hanzi_trainer.py "YCT=3" passage.txt --mode font   # needs a pinyin font
 ```
 
+Exceptions and a teacher copy (also in the app under "Exceptions"):
+
+```bash
+python hanzi_trainer.py "YCT=3" passage.txt \
+    --show-pinyin 你 --hide-pinyin 龙 --answer-key key.docx
+```
+
+`--show-pinyin` keeps pinyin on characters the level would hide;
+`--hide-pinyin` removes it from characters the level would show. The answer key
+is the same passage with pinyin on every character. In the app, one button
+downloads the student worksheet and the answer key together as a zip.
+
 ## Fonts
 
 In the default pinyin mode no font needs installing. The worksheet names two

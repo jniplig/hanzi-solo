@@ -73,6 +73,30 @@ def load_known_chars(
     return known
 
 
+def hanzi_in(text: str) -> set[str]:
+    """The distinct Chinese characters in `text` (everything else is ignored)."""
+    return {ch for ch in text if is_hanzi(ch)}
+
+
+def apply_exceptions(
+    known: set[str], show_pinyin: str = "", hide_pinyin: str = ""
+) -> set[str]:
+    """Adjust the known set by hand, in both directions.
+
+    show_pinyin: characters that keep their pinyin even if the level knows them.
+    hide_pinyin: characters that lose their pinyin even if the level does not
+    know them. A character in both raises ValueError. Non-Chinese characters
+    in either string are ignored.
+    """
+    show, hide = hanzi_in(show_pinyin), hanzi_in(hide_pinyin)
+    clash = show & hide
+    if clash:
+        raise ValueError(
+            "In both exception lists: " + "".join(sorted(clash))
+        )
+    return (known - show) | hide
+
+
 def _set_font(run, name: str, size_pt: int) -> None:
     run.font.size = Pt(size_pt)
     run.font.name = name
@@ -202,6 +226,31 @@ def document_bytes(doc: Document) -> bytes:
     return buf.getvalue()
 
 
+def build_answer_key(text: str, **kwargs) -> Document:
+    """Teacher copy: the same worksheet with pinyin on every character.
+
+    Takes the same keyword options as build_document (except `known`).
+    """
+    return build_document(text, set(), **kwargs)
+
+
+def worksheet_bundle(text: str, known: set[str], **kwargs) -> bytes:
+    """A zip holding student_worksheet.docx and teacher_answer_key.docx."""
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(
+            "student_worksheet.docx",
+            document_bytes(build_document(text, known, **kwargs)),
+        )
+        z.writestr(
+            "teacher_answer_key.docx",
+            document_bytes(build_answer_key(text, **kwargs)),
+        )
+    return buf.getvalue()
+
+
 def parse_selections(arg: str) -> dict[str, int]:
     """Parse 'YCT=3,HSK3.0=1' into {'YCT': 3, 'HSK3.0': 1}."""
     selections: dict[str, int] = {}
@@ -229,20 +278,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pinyin-font", default=PINYIN_FONT, help="font mode only")
     parser.add_argument("--plain-font", default=PLAIN_FONT)
     parser.add_argument("--ruby-font", default=RUBY_FONT, help="pinyin mode only")
+    parser.add_argument(
+        "--show-pinyin", default="", help="characters that keep pinyin despite the level"
+    )
+    parser.add_argument(
+        "--hide-pinyin", default="", help="characters that lose pinyin despite the level"
+    )
+    parser.add_argument(
+        "--answer-key", metavar="FILE", help="also write a teacher copy with all pinyin"
+    )
     args = parser.parse_args(argv)
 
     known = load_known_chars(args.data, parse_selections(args.levels))
+    known = apply_exceptions(known, args.show_pinyin, args.hide_pinyin)
     text = Path(args.passage).read_text(encoding="utf-8")
-    doc = build_document(
-        text,
-        known,
+    options = dict(
         mode=args.mode,
         pinyin_font=args.pinyin_font,
         plain_font=args.plain_font,
         ruby_font=args.ruby_font,
     )
-    Path(args.output).write_bytes(document_bytes(doc))
+    Path(args.output).write_bytes(
+        document_bytes(build_document(text, known, **options))
+    )
     print(f"{len(known)} known characters -> {args.output}")
+    if args.answer_key:
+        Path(args.answer_key).write_bytes(
+            document_bytes(build_answer_key(text, **options))
+        )
+        print(f"answer key -> {args.answer_key}")
     return 0
 
 

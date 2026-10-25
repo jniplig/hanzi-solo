@@ -9,6 +9,8 @@ from hanzi_trainer import (
     PINYIN_FONT,
     PLAIN_FONT,
     RUBY_FONT,
+    apply_exceptions,
+    build_answer_key,
     build_document,
     document_bytes,
     load_known_chars,
@@ -16,6 +18,7 @@ from hanzi_trainer import (
     main,
     parse_selections,
     pinyin_per_character,
+    worksheet_bundle,
 )
 
 
@@ -173,3 +176,61 @@ def test_cli_writes_a_worksheet_in_each_mode(tmp_path):
         assert Document(str(out)).paragraphs
     assert _ruby_pairs(Document(str(tmp_path / "pinyin.docx"))) == [("龙", "lóng")]
     assert _ruby_pairs(Document(str(tmp_path / "font.docx"))) == []
+
+
+# --- exceptions and answer key -------------------------------------------------
+
+
+def test_exceptions_work_in_both_directions():
+    known = load_known_chars(DATA_FILE, {"YCT": 1})
+    assert "你" in known and "龙" not in known
+    adjusted = apply_exceptions(known, show_pinyin="你", hide_pinyin="龙")
+    assert "你" not in adjusted and "龙" in adjusted
+    assert known == load_known_chars(DATA_FILE, {"YCT": 1})  # input untouched
+
+
+def test_exceptions_ignore_non_chinese_and_empty():
+    known = {"你"}
+    assert apply_exceptions(known, "abc 1,", "") == known
+
+
+def test_exception_in_both_lists_raises():
+    with pytest.raises(ValueError, match="both exception lists: 龙"):
+        apply_exceptions(set(), show_pinyin="龙猫", hide_pinyin="龙")
+
+
+def test_exceptions_change_the_worksheet():
+    known = apply_exceptions(
+        load_known_chars(DATA_FILE, {"YCT": 1}), show_pinyin="你", hide_pinyin="龙"
+    )
+    pairs = _ruby_pairs(build_document("你龙", known))
+    assert pairs == [("你", "nǐ")]
+
+
+def test_answer_key_has_pinyin_on_every_character():
+    key = build_answer_key("你龙,好。")
+    assert _ruby_pairs(key) == [("你", "nǐ"), ("龙", "lóng"), ("好", "hǎo")]
+
+
+def test_bundle_holds_student_and_teacher_copies(tmp_path):
+    import io
+    import zipfile
+
+    known = load_known_chars(DATA_FILE, {"YCT": 1})
+    z = zipfile.ZipFile(io.BytesIO(worksheet_bundle("你龙", known)))
+    assert sorted(z.namelist()) == ["student_worksheet.docx", "teacher_answer_key.docx"]
+    z.extractall(tmp_path)
+    student = Document(str(tmp_path / "student_worksheet.docx"))
+    teacher = Document(str(tmp_path / "teacher_answer_key.docx"))
+    assert _ruby_pairs(student) == [("龙", "lóng")]
+    assert _ruby_pairs(teacher) == [("你", "nǐ"), ("龙", "lóng")]
+
+
+def test_cli_exceptions_and_answer_key(tmp_path):
+    passage = tmp_path / "p.txt"
+    passage.write_text("你龙\n", encoding="utf-8")
+    out, key = tmp_path / "s.docx", tmp_path / "k.docx"
+    assert main(["YCT=1", str(passage), "-o", str(out), "--show-pinyin", "你",
+                 "--hide-pinyin", "龙", "--answer-key", str(key)]) == 0
+    assert _ruby_pairs(Document(str(out))) == [("你", "nǐ")]
+    assert len(_ruby_pairs(Document(str(key)))) == 2

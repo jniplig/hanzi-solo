@@ -10,12 +10,15 @@ from hanzi_trainer import (
     PINYIN_FONT,
     PLAIN_FONT,
     RUBY_FONT,
+    apply_exceptions,
     build_document,
     document_bytes,
+    hanzi_in,
     is_hanzi,
     load_known_chars,
     load_levels,
     pinyin_per_character,
+    worksheet_bundle,
 )
 
 SAMPLE = "你好,我是老师。我喜欢吃苹果,也喜欢喝牛奶。\n明天我们去北京。"
@@ -64,8 +67,25 @@ with st.expander("Fonts and sizes"):
     else:
         pinyin_font = st.text_input("Font that shows pinyin", PINYIN_FONT)
 
+with st.expander("Exceptions: pick characters by hand"):
+    show_pinyin = st.text_input(
+        "Always show pinyin for",
+        key="show_pinyin",
+        help="Characters at the chosen levels that you still want pinyin on.",
+    )
+    hide_pinyin = st.text_input(
+        "Never show pinyin for",
+        key="hide_pinyin",
+        help="Characters above the chosen levels that the class already knows.",
+    )
+
 known = load_known_chars(DATA_FILE, selections) if selections else set()
-hanzi = {ch for ch in passage if is_hanzi(ch)}
+try:
+    known = apply_exceptions(known, show_pinyin, hide_pinyin)
+except ValueError as err:
+    st.error(f"{err}. Remove each from one of the two boxes.")
+    st.stop()
+hanzi = hanzi_in(passage)
 switched = hanzi & known
 st.caption(
     f"{len(hanzi)} different characters in the passage: "
@@ -110,9 +130,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-doc = build_document(
-    passage,
-    known,
+options = dict(
     mode=mode,
     pinyin_font=pinyin_font,
     plain_font=plain_font,
@@ -122,7 +140,14 @@ doc = build_document(
 )
 st.download_button(
     "Download worksheet (.docx)",
-    data=document_bytes(doc),
+    data=document_bytes(build_document(passage, known, **options)),
     file_name="worksheet.docx",
     mime=DOCX_MIME,
+)
+st.download_button(
+    "Download student worksheet + teacher answer key (.zip)",
+    data=worksheet_bundle(passage, known, **options),
+    file_name="worksheet_and_answer_key.zip",
+    mime="application/zip",
+    help="The answer key is the same passage with pinyin on every character.",
 )
