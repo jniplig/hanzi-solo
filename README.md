@@ -98,7 +98,7 @@ make them sensible.
 
 ## Presenting in class
 
-Under the preview, "Present to the class" shows the passage in large type for a
+Choose **Present** above the preview to show the passage in large type for a
 projector. Press **Full screen** (Esc leaves it), change the size with **A-**
 and **A+**, and press **Space** or "Show all pinyin" to reveal the pinyin on the
 characters the class is expected to know. It uses the same levels and exceptions

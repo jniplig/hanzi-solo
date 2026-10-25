@@ -41,7 +41,7 @@ from hanzi_trainer import (  # noqa: E402
 
 SAMPLE = "你好,我是老师。我喜欢吃苹果,也喜欢喝牛奶。\n明天我们去北京。"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-VIEW_STUDENT, VIEW_KEY = "Student copy", "Answer key"
+VIEW_STUDENT, VIEW_KEY, VIEW_PRESENT = "Student copy", "Answer key", "Present"
 # The passage report is a niche tool, kept off the main screen for now. Set the
 # environment variable HANZI_SOLO_REPORT=1 to show it (a settings screen may
 # take over this switch later).
@@ -305,9 +305,9 @@ with right:
         )
 
     view = st.radio(
-        "Preview", [VIEW_STUDENT, VIEW_KEY], horizontal=True, label_visibility="collapsed"
+        "Preview", [VIEW_STUDENT, VIEW_KEY, VIEW_PRESENT], horizontal=True, label_visibility="collapsed"
     )
-    shown = known if view == VIEW_STUDENT else set()
+    shown = set() if view == VIEW_KEY else known
     plain_css = html.escape(plain_font)
     rt_style = f"font-size:0.4em;font-family:'{html.escape(ruby_font)}',sans-serif"
     lines = []
@@ -321,7 +321,7 @@ with right:
                     reading
                     and is_hanzi(ch)
                     and ch not in shown
-                    and not (first_only and view == VIEW_STUDENT and ch in seen_pinyin)
+                    and not (first_only and view != VIEW_KEY and ch in seen_pinyin)
                 ):
                     seen_pinyin.add(ch)
                     parts.append(
@@ -354,31 +354,39 @@ with right:
             '<div style="text-align:center;font-weight:700;font-size:1.4rem;margin-bottom:.6rem">'
             "Answer key</div>"
         )
-    if name_line and view == VIEW_STUDENT:
+    if name_line and view != VIEW_KEY:
         paper_head += (
             '<div style="font-size:.95rem;margin-bottom:.8rem">'
             "Name: ____________________ &nbsp;&nbsp; Date: ______________</div>"
         )
-    label = " · ".join(f"{s} {lvl}" for s, lvl in selections.items())
-    st.markdown(
-        '<div class="hs-paper">'
-        f'<div class="hs-paper-label">Reading practice{" · " + html.escape(label) if label else ""}</div>'
-        f"{paper_head}"
-        f'<div style="font-size:2.2rem;line-height:{3.6 * line_spacing:g}rem;'
-        f"font-family:'{plain_css}','Noto Serif SC',serif\">"
-        f'{"<br>".join(lines)}</div></div>',
-        unsafe_allow_html=True,
-    )
-    if mode == MODE_PINYIN:
+    if view == VIEW_PRESENT:
+        st.iframe(projector_page(passage, known, plain_font, ruby_font), height=520)
         st.markdown(
-            '<div class="hs-muted">Pinyin appears above the characters that are not yet known.</div>',
+            '<div class="hs-muted">Press Full screen for the projector. Pinyin on unknown '
+            "characters stays visible; the space bar reveals the rest.</div>",
             unsafe_allow_html=True,
         )
     else:
+        label = " · ".join(f"{s} {lvl}" for s, lvl in selections.items())
         st.markdown(
-            '<div class="hs-muted">Shows the fonts only if they are installed on this computer.</div>',
+            '<div class="hs-paper">'
+            f'<div class="hs-paper-label">Reading practice{" · " + html.escape(label) if label else ""}</div>'
+            f"{paper_head}"
+            f'<div style="font-size:2.2rem;line-height:{3.6 * line_spacing:g}rem;'
+            f"font-family:'{plain_css}','Noto Serif SC',serif\">"
+            f'{"<br>".join(lines)}</div></div>',
             unsafe_allow_html=True,
         )
+        if mode == MODE_PINYIN:
+            st.markdown(
+                '<div class="hs-muted">Pinyin appears above the characters that are not yet known.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="hs-muted">Shows the fonts only if they are installed on this computer.</div>',
+                unsafe_allow_html=True,
+            )
 
     if SHOW_REPORT:
         report = passage_report(
@@ -429,14 +437,6 @@ with right:
                 file_name="passage_report.csv",
                 mime="text/csv",
             )
-
-    st.markdown(
-        '<div class="hs-step" style="margin-top:1.2rem">Present to the class</div>'
-        '<div class="hs-muted">Full screen for a projector. Pinyin on unknown '
-        "characters stays visible; the space bar reveals the rest.</div>",
-        unsafe_allow_html=True,
-    )
-    st.iframe(projector_page(passage, known, plain_font, ruby_font), height=460)
 
 st.markdown(
     '<div class="hs-foot">Open source, MIT licence. Nothing you paste is stored. '

@@ -146,3 +146,14 @@ def test_first_only_is_offered_only_in_pinyin_mode():
     at.radio[0].set_value("font").run()
     assert not at.exception
     assert [c.key for c in at.checkbox] == ["name_line"]  # first-only needs pinyin mode
+
+
+def test_present_view_replaces_the_paper_preview_without_a_separate_section():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    view = next(r for r in at.radio if "Present" in r.options)
+    assert view.options == ["Student copy", "Answer key", "Present"]
+    assert any('class="hs-paper"' in m.value for m in at.markdown)
+    view.set_value("Present").run()
+    assert not at.exception
+    assert not any('class="hs-paper"' in m.value for m in at.markdown)
+    assert not any("Present to the class" in m.value for m in at.markdown)
