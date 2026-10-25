@@ -52,6 +52,21 @@ python hanzi_trainer.py "YCT=3" passage.txt \
 is the same passage with pinyin on every character. In the app, one button
 downloads the student worksheet and the answer key together as a zip.
 
+## Worksheet layout
+
+Under "Worksheet layout" in the app (or with command-line flags) you can add a
+title, a Name and Date line, wider line spacing (1 to 2 times), and, in pinyin
+mode, show pinyin only where a character first appears so repeats read clean.
+The answer key always shows pinyin on every character, has no Name line, and
+adds "(Answer key)" to the title. Spacing, the Name line and first-appearance
+mode are kept in the class set-up link; the title is not, because it belongs to
+one lesson.
+
+```bash
+python hanzi_trainer.py "YCT=3" passage.txt --title "Lesson 1" --name-line \
+    --line-spacing 1.5 --first-only
+```
+
 ## Uploading a passage
 
 In the app, upload a Word (`.docx`) or text (`.txt`) file instead of pasting. The

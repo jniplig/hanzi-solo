@@ -21,6 +21,7 @@ from xml.sax.saxutils import escape
 from docx import Document
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from pypinyin import Style, pinyin
 
@@ -180,6 +181,13 @@ def _ruby_run(
     return parse_xml(xml)
 
 
+def _new_paragraph(doc: Document, line_spacing: float):
+    para = doc.add_paragraph()
+    if line_spacing != 1.0:
+        para.paragraph_format.line_spacing = line_spacing
+    return para
+
+
 def _add_pinyin_paragraph(
     doc: Document,
     line: str,
@@ -188,11 +196,19 @@ def _add_pinyin_paragraph(
     ruby_font: str,
     size_pt: int,
     ruby_pt: int,
+    line_spacing: float = 1.0,
+    seen: set[str] | None = None,
 ) -> None:
-    para = doc.add_paragraph()
+    """`seen`, when given, limits pinyin to the first appearance of a character
+    (it is updated as characters are annotated)."""
+    para = _new_paragraph(doc, line_spacing)
     buffer = ""
     for ch, reading in zip(line, pinyin_per_character(line)):
-        if reading and is_hanzi(ch) and ch not in known:
+        if reading and is_hanzi(ch) and ch not in known and not (
+            seen is not None and ch in seen
+        ):
+            if seen is not None:
+                seen.add(ch)
             if buffer:
                 _set_font(para.add_run(buffer), plain_font, size_pt)
                 buffer = ""
@@ -212,9 +228,10 @@ def _add_font_paragraph(
     pinyin_font: str,
     plain_font: str,
     size_pt: int,
+    line_spacing: float = 1.0,
 ) -> None:
     """Consecutive characters share one run per font."""
-    para = doc.add_paragraph()
+    para = _new_paragraph(doc, line_spacing)
     buffer = ""
     current = None
     for ch in line:
@@ -237,18 +254,43 @@ def build_document(
     ruby_font: str = RUBY_FONT,
     size_pt: int = 28,
     ruby_pt: int = 12,
+    title: str = "",
+    name_line: bool = False,
+    line_spacing: float = 1.0,
+    pinyin_first_only: bool = False,
 ) -> Document:
-    """One paragraph per line of `text`."""
+    """One paragraph per line of `text`, under an optional title and name/date
+    line. `line_spacing` is a multiple (1.0 = single). `pinyin_first_only`
+    (pinyin mode) annotates a character only where it first appears."""
     if mode not in (MODE_PINYIN, MODE_FONT):
         raise ValueError(f"Unknown mode '{mode}'")
+    if not 0.5 <= line_spacing <= 4:
+        raise ValueError("Line spacing must be between 0.5 and 4.")
     doc = Document()
+    if title.strip():
+        heading = doc.add_paragraph()
+        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = heading.add_run(title.strip())
+        _set_font(run, plain_font, 20)
+        run.bold = True
+    if name_line:
+        line = doc.add_paragraph()
+        _set_font(
+            line.add_run("Name: ____________________      Date: ______________"),
+            ruby_font,
+            12,
+        )
+    seen: set[str] | None = set() if pinyin_first_only else None
     for line in text.splitlines() or [""]:
         if mode == MODE_PINYIN:
             _add_pinyin_paragraph(
-                doc, line, known, plain_font, ruby_font, size_pt, ruby_pt
+                doc, line, known, plain_font, ruby_font, size_pt, ruby_pt,
+                line_spacing, seen,
             )
         else:
-            _add_font_paragraph(doc, line, known, pinyin_font, plain_font, size_pt)
+            _add_font_paragraph(
+                doc, line, known, pinyin_font, plain_font, size_pt, line_spacing
+            )
     return doc
 
 
@@ -261,8 +303,12 @@ def document_bytes(doc: Document) -> bytes:
 def build_answer_key(text: str, **kwargs) -> Document:
     """Teacher copy: the same worksheet with pinyin on every character.
 
-    Takes the same keyword options as build_document (except `known`).
+    Takes the same keyword options as build_document (except `known`). It shows
+    every pinyin, has no name line, and says "Answer key" in the title.
     """
+    kwargs = dict(kwargs, name_line=False, pinyin_first_only=False)
+    title = kwargs.get("title", "").strip()
+    kwargs["title"] = f"{title} (Answer key)" if title else "Answer key"
     return build_document(text, set(), **kwargs)
 
 
@@ -447,6 +493,7 @@ def report_csv(report: dict) -> bytes:
 
 SIZE_RANGE = (18, 48)
 RUBY_RANGE = (8, 18)
+SPACING_RANGE = (1.0, 2.0)
 
 
 def encode_setup(
@@ -458,6 +505,9 @@ def encode_setup(
     ruby_pt: int = 12,
     plain_font: str = PLAIN_FONT,
     ruby_font: str = RUBY_FONT,
+    line_spacing: float = 1.0,
+    name_line: bool = False,
+    first_only: bool = False,
 ) -> dict[str, str]:
     """A class set-up as short URL query parameters (settings left at their
     default are left out). The passage is deliberately not part of it."""
@@ -475,6 +525,12 @@ def encode_setup(
     ):
         if value != default:
             params[name] = str(value)
+    if line_spacing != 1.0:
+        params["spacing"] = f"{line_spacing:g}"
+    if name_line:
+        params["nameline"] = "1"
+    if first_only:
+        params["first"] = "1"
     return params
 
 
@@ -504,6 +560,15 @@ def decode_setup(params: dict[str, str], levels: dict[str, int]) -> dict:
         value = _bounded_int(params.get(name, ""), low, high)
         if value is not None:
             out[key] = value
+    try:
+        spacing = float(params.get("spacing", ""))
+    except ValueError:
+        spacing = None
+    if spacing is not None and spacing == spacing:  # not NaN
+        out["line_spacing"] = round(min(max(spacing, SPACING_RANGE[0]), SPACING_RANGE[1]), 2)
+    for name, key in (("nameline", "name_line"), ("first", "first_only")):
+        if params.get(name) == "1":
+            out[key] = True
     for name, key in (("cfont", "plain_font"), ("rfont", "ruby_font")):
         font = params.get(name, "").strip()[:60]
         if font:
@@ -536,6 +601,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--answer-key", metavar="FILE", help="also write a teacher copy with all pinyin"
     )
+    parser.add_argument("--title", default="", help="heading at the top of the worksheet")
+    parser.add_argument("--name-line", action="store_true", help="add a Name / Date line")
+    parser.add_argument(
+        "--line-spacing", type=float, default=1.0, help="multiple of single spacing (default 1.0)"
+    )
+    parser.add_argument(
+        "--first-only",
+        action="store_true",
+        help="pinyin mode: annotate a character only where it first appears",
+    )
     args = parser.parse_args(argv)
 
     known = load_known_chars(args.data, parse_selections(args.levels))
@@ -546,6 +621,10 @@ def main(argv: list[str] | None = None) -> int:
         pinyin_font=args.pinyin_font,
         plain_font=args.plain_font,
         ruby_font=args.ruby_font,
+        title=args.title,
+        name_line=args.name_line,
+        line_spacing=args.line_spacing,
+        pinyin_first_only=args.first_only,
     )
     Path(args.output).write_bytes(
         document_bytes(build_document(text, known, **options))

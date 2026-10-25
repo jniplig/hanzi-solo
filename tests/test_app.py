@@ -116,3 +116,33 @@ def test_report_shows_what_is_left_to_learn(monkeypatch):
     at.query_params["lists"] = "YCT:4"
     at.run()
     assert {m.label: m.value for m in at.metric}["Text the class can read"] == "100%"
+
+
+def test_layout_settings_are_read_from_the_page_address():
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.query_params["spacing"] = "1.5"
+    at.query_params["nameline"] = "1"
+    at.query_params["first"] = "1"
+    at.run()
+    assert not at.exception
+    assert at.slider(key="line_spacing").value == 1.5
+    assert at.checkbox(key="name_line").value is True
+    assert at.checkbox(key="first_only").value is True
+    assert any("Name: ____" in m.value for m in at.markdown)  # shown on the preview paper
+
+
+def test_title_shows_on_the_preview_and_the_key_is_labelled():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.text_input(key="title").set_value("第一课").run()
+    assert not at.exception
+    assert any("第一课</div>" in m.value for m in at.markdown)
+    at.radio[1].set_value("Answer key").run()
+    assert any("第一课 (Answer key)" in m.value for m in at.markdown)
+
+
+def test_first_only_is_offered_only_in_pinyin_mode():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    assert [c.key for c in at.checkbox] == ["name_line", "first_only"]
+    at.radio[0].set_value("font").run()
+    assert not at.exception
+    assert [c.key for c in at.checkbox] == ["name_line"]  # first-only needs pinyin mode

@@ -11,6 +11,7 @@ from hanzi_trainer import (
     PINYIN_FONT,
     PLAIN_FONT,
     RUBY_FONT,
+    SPACING_RANGE,
     UPLOAD_TYPES,
     apply_exceptions,
     build_document,
@@ -129,6 +130,10 @@ st.session_state.setdefault("size_pt", 28)
 st.session_state.setdefault("ruby_pt", 12)
 st.session_state.setdefault("plain_font", PLAIN_FONT)
 st.session_state.setdefault("ruby_font", RUBY_FONT)
+st.session_state.setdefault("line_spacing", 1.0)
+st.session_state.setdefault("name_line", False)
+st.session_state.setdefault("first_only", False)
+st.session_state.setdefault("title", "")
 if "_setup_loaded" not in st.session_state:
     st.session_state["_setup_loaded"] = True
     saved_setup = decode_setup(dict(st.query_params), levels)
@@ -139,7 +144,10 @@ if "_setup_loaded" not in st.session_state:
     for name in ("show", "hide"):
         if name in saved_setup:
             st.session_state[f"{name}_pinyin"] = list(saved_setup[name])
-    for name in ("mode", "size_pt", "ruby_pt", "plain_font", "ruby_font"):
+    for name in (
+        "mode", "size_pt", "ruby_pt", "plain_font", "ruby_font",
+        "line_spacing", "name_line", "first_only",
+    ):
         if name in saved_setup:
             st.session_state[name] = saved_setup[name]
 left, right = st.columns([5, 7], gap="large")
@@ -222,15 +230,28 @@ with left:
         else:
             pinyin_font = st.text_input("Font that shows pinyin", PINYIN_FONT)
 
+    first_only = False
+    with st.expander("Worksheet layout"):
+        title = st.text_input("Title (optional)", key="title")
+        name_line = st.checkbox("Add a Name and Date line", key="name_line")
+        line_spacing = st.slider(
+            "Line spacing", SPACING_RANGE[0], SPACING_RANGE[1], step=0.25, key="line_spacing"
+        )
+        if mode == MODE_PINYIN:
+            first_only = st.checkbox(
+                "Pinyin on the first appearance of each character only", key="first_only"
+            )
+
     st.markdown(
-        '<div class="hs-muted">This set-up (levels, exceptions, sizes, fonts) is kept in the '
+        '<div class="hs-muted">This set-up (levels, exceptions, sizes, fonts, layout) is kept in the '
         "page address, never the passage. Bookmark the page to reopen this class.</div>",
         unsafe_allow_html=True,
     )
 
 known = apply_exceptions(level_known, show_pinyin, hide_pinyin)
 setup_params = encode_setup(
-    selections, show_pinyin, hide_pinyin, mode, size_pt, ruby_pt, plain_font, ruby_font
+    selections, show_pinyin, hide_pinyin, mode, size_pt, ruby_pt, plain_font, ruby_font,
+    line_spacing, name_line, first_only,
 )
 if dict(st.query_params) != setup_params:
     st.query_params.from_dict(setup_params)
@@ -241,6 +262,10 @@ options = dict(
     ruby_font=ruby_font,
     size_pt=size_pt,
     ruby_pt=ruby_pt,
+    title=title,
+    name_line=name_line,
+    line_spacing=line_spacing,
+    pinyin_first_only=first_only,
 )
 
 # ---- right: downloads and preview ------------------------------------------------
@@ -278,12 +303,19 @@ with right:
     plain_css = html.escape(plain_font)
     rt_style = f"font-size:0.4em;font-family:'{html.escape(ruby_font)}',sans-serif"
     lines = []
+    seen_pinyin: set[str] = set()
     for line in passage.splitlines():
         readings = pinyin_per_character(line) if mode == MODE_PINYIN else [""] * len(line)
         parts = []
         for ch, reading in zip(line, readings):
             if mode == MODE_PINYIN:
-                if reading and is_hanzi(ch) and ch not in shown:
+                if (
+                    reading
+                    and is_hanzi(ch)
+                    and ch not in shown
+                    and not (first_only and view == VIEW_STUDENT and ch in seen_pinyin)
+                ):
+                    seen_pinyin.add(ch)
                     parts.append(
                         f'<ruby>{html.escape(ch)}<rt style="{rt_style}">'
                         f"{html.escape(reading)}</rt></ruby>"
@@ -302,11 +334,29 @@ with right:
                 )
         lines.append("".join(parts))
 
+    paper_head = ""
+    if title.strip():
+        shown_title = title.strip() + (" (Answer key)" if view == VIEW_KEY else "")
+        paper_head += (
+            '<div style="text-align:center;font-weight:700;font-size:1.4rem;margin-bottom:.6rem">'
+            f"{html.escape(shown_title)}</div>"
+        )
+    elif view == VIEW_KEY:
+        paper_head += (
+            '<div style="text-align:center;font-weight:700;font-size:1.4rem;margin-bottom:.6rem">'
+            "Answer key</div>"
+        )
+    if name_line and view == VIEW_STUDENT:
+        paper_head += (
+            '<div style="font-size:.95rem;margin-bottom:.8rem">'
+            "Name: ____________________ &nbsp;&nbsp; Date: ______________</div>"
+        )
     label = " · ".join(f"{s} {lvl}" for s, lvl in selections.items())
     st.markdown(
         '<div class="hs-paper">'
         f'<div class="hs-paper-label">Reading practice{" · " + html.escape(label) if label else ""}</div>'
-        f'<div style="font-size:2.2rem;line-height:3.6rem;'
+        f"{paper_head}"
+        f'<div style="font-size:2.2rem;line-height:{3.6 * line_spacing:g}rem;'
         f"font-family:'{plain_css}','Noto Serif SC',serif\">"
         f'{"<br>".join(lines)}</div></div>',
         unsafe_allow_html=True,

@@ -390,3 +390,96 @@ def test_report_levels_flow_into_rows_and_csv():
     assert rows[0] == ["Character", "Pinyin", "Times in passage", "Status", "First taught at"]
     assert rows[1][:5] == ["你", "nǐ", "1", "Known", "YCT 1"]
     assert rows[2][3] == "To learn"
+
+
+# --- worksheet layout options -------------------------------------------------------------
+
+
+def _lines(doc):
+    """Paragraph texts including characters inside pinyin annotations."""
+    return extract_text("x.docx", document_bytes(doc)).split("\n")
+
+
+def test_title_and_name_line_come_first():
+    doc = build_document("龙", set(), title="第一课", name_line=True)
+    texts = _lines(doc)
+    assert texts[0] == "第一课" and texts[1].startswith("Name:") and "Date:" in texts[1]
+    assert texts[2] == "龙"
+    heading = doc.paragraphs[0]
+    assert heading.alignment == 1  # centred
+    assert heading.runs[0].bold is True
+
+
+def test_no_title_or_name_line_by_default():
+    doc = build_document("龙\n你", set())
+    assert _lines(doc) == ["龙", "你"]
+
+
+def test_line_spacing_applies_to_passage_paragraphs_in_both_modes():
+    for mode in (MODE_PINYIN, MODE_FONT):
+        doc = build_document("龙\n你", set(), mode=mode, line_spacing=1.5)
+        assert [p.paragraph_format.line_spacing for p in doc.paragraphs] == [1.5, 1.5]
+    assert build_document("龙", set()).paragraphs[0].paragraph_format.line_spacing is None
+
+
+def test_line_spacing_is_validated():
+    for bad in (0.1, 9):
+        with pytest.raises(ValueError, match="Line spacing"):
+            build_document("龙", set(), line_spacing=bad)
+
+
+def test_pinyin_first_only_annotates_each_character_once():
+    doc = build_document("龙龙你\n龙你", set(), pinyin_first_only=True)
+    assert _ruby_pairs(doc) == [("龙", "lóng"), ("你", "nǐ")]
+    assert _lines(doc) == ["龙龙你", "龙你"]  # the text itself is intact
+    full = build_document("龙龙你\n龙你", set())
+    assert len(_ruby_pairs(full)) == 5
+
+
+def test_answer_key_ignores_first_only_and_name_line_and_is_titled():
+    key = build_answer_key("龙龙", pinyin_first_only=True, name_line=True, title="第一课")
+    assert len(_ruby_pairs(key)) == 2
+    assert [p.text for p in key.paragraphs][0] == "第一课 (Answer key)"
+    assert not any(p.text.startswith("Name:") for p in key.paragraphs)
+    assert build_answer_key("龙").paragraphs[0].text == "Answer key"
+
+
+def test_bundle_applies_the_layout_to_both_copies(tmp_path):
+    import io
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(worksheet_bundle("龙龙", set(), title="T", name_line=True,
+                                                    pinyin_first_only=True)))
+    z.extractall(tmp_path)
+    student = Document(str(tmp_path / "student_worksheet.docx"))
+    teacher = Document(str(tmp_path / "teacher_answer_key.docx"))
+    assert student.paragraphs[0].text == "T" and student.paragraphs[1].text.startswith("Name:")
+    assert len(_ruby_pairs(student)) == 1 and len(_ruby_pairs(teacher)) == 2
+
+
+def test_cli_layout_flags(tmp_path):
+    passage = tmp_path / "p.txt"
+    passage.write_text("龙龙\n", encoding="utf-8")
+    out = tmp_path / "w.docx"
+    assert main(["YCT=1", str(passage), "-o", str(out), "--title", "课", "--name-line",
+                 "--line-spacing", "1.5", "--first-only"]) == 0
+    doc = Document(str(out))
+    assert doc.paragraphs[0].text == "课" and doc.paragraphs[1].text.startswith("Name:")
+    assert doc.paragraphs[2].paragraph_format.line_spacing == 1.5
+    assert len(_ruby_pairs(doc)) == 1
+
+
+def test_layout_settings_travel_in_the_setup_link():
+    params = encode_setup({"YCT": 1}, line_spacing=1.5, name_line=True, first_only=True)
+    assert params == {"lists": "YCT:1", "spacing": "1.5", "nameline": "1", "first": "1"}
+    decoded = decode_setup(params, LEVELS)
+    assert (decoded["line_spacing"], decoded["name_line"], decoded["first_only"]) == (1.5, True, True)
+    assert "spacing" not in encode_setup({"YCT": 1})  # defaults stay out of the address
+
+
+def test_decode_clamps_or_ignores_bad_layout_values():
+    assert decode_setup({"spacing": "9"}, LEVELS) == {"line_spacing": 2.0}
+    assert decode_setup({"spacing": "0.2"}, LEVELS) == {"line_spacing": 1.0}
+    for bad in ("abc", "nan", ""):
+        assert decode_setup({"spacing": bad}, LEVELS) == {}
+    assert decode_setup({"nameline": "yes", "first": "0"}, LEVELS) == {}
