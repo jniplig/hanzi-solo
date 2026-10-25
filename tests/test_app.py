@@ -95,7 +95,14 @@ def test_changes_are_written_back_to_the_address():
     assert "YCT:2" in str(at.query_params["lists"])
 
 
-def test_report_shows_what_is_left_to_learn():
+def test_report_is_hidden_by_default():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    assert not at.exception
+    assert len(at.metric) == 0
+
+
+def test_report_shows_what_is_left_to_learn(monkeypatch):
+    monkeypatch.setenv("HANZI_SOLO_REPORT", "1")
     at = AppTest.from_file(APP, default_timeout=30)
     at.query_params["lists"] = "YCT:1"
     at.run()

@@ -1,5 +1,6 @@
 """Streamlit front end for Hanzi Solo."""
 import html
+import os
 
 import streamlit as st
 
@@ -32,6 +33,10 @@ from hanzi_trainer import (
 SAMPLE = "你好,我是老师。我喜欢吃苹果,也喜欢喝牛奶。\n明天我们去北京。"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 VIEW_STUDENT, VIEW_KEY = "Student copy", "Answer key"
+# The passage report is a niche tool, kept off the main screen for now. Set the
+# environment variable HANZI_SOLO_REPORT=1 to show it (a settings screen may
+# take over this switch later).
+SHOW_REPORT = os.environ.get("HANZI_SOLO_REPORT") == "1"
 
 st.set_page_config(page_title="Hanzi Solo", page_icon="字", layout="wide")
 
@@ -317,54 +322,55 @@ with right:
             unsafe_allow_html=True,
         )
 
-    report = passage_report(
-        passage, known, level_labels_for(tuple(selections)) if selections else {}
-    )
-    st.markdown(
-        '<div class="hs-step" style="margin-top:1.2rem">Passage report</div>',
-        unsafe_allow_html=True,
-    )
-    if not report["total"]:
+    if SHOW_REPORT:
+        report = passage_report(
+            passage, known, level_labels_for(tuple(selections)) if selections else {}
+        )
         st.markdown(
-            '<div class="hs-muted">No Chinese characters in the passage yet.</div>',
+            '<div class="hs-step" style="margin-top:1.2rem">Passage report</div>',
             unsafe_allow_html=True,
         )
-    else:
-        m_text, m_known, m_learn = st.columns(3)
-        m_text.metric(
-            "Text the class can read",
-            f"{report['pct_text']}%",
-            help="Share of all the characters in the passage, counting repeats, that are known.",
-        )
-        m_known.metric(
-            "Different characters known", f"{report['known_distinct']} of {report['distinct']}"
-        )
-        m_learn.metric("Still to learn", report["distinct"] - report["known_distinct"])
-        show_known = st.toggle("Show known characters too", key="report_all")
-        table = [
-            {
-                "Character": r["char"],
-                "Pinyin": r["pinyin"],
-                "Times in passage": r["count"],
-                "Status": "Known" if r["known"] else "To learn",
-                "First taught at": r["level"] or ("not in these lists" if selections else ""),
-            }
-            for r in report["rows"]
-            if show_known or not r["known"]
-        ]
-        if table:
-            st.dataframe(table, hide_index=True, width="stretch")
-        else:
+        if not report["total"]:
             st.markdown(
-                '<div class="hs-muted">Every character is known at these levels.</div>',
+                '<div class="hs-muted">No Chinese characters in the passage yet.</div>',
                 unsafe_allow_html=True,
             )
-        st.download_button(
-            "Download report (.csv)",
-            data=report_csv(report),
-            file_name="passage_report.csv",
-            mime="text/csv",
-        )
+        else:
+            m_text, m_known, m_learn = st.columns(3)
+            m_text.metric(
+                "Text the class can read",
+                f"{report['pct_text']}%",
+                help="Share of all the characters in the passage, counting repeats, that are known.",
+            )
+            m_known.metric(
+                "Different characters known", f"{report['known_distinct']} of {report['distinct']}"
+            )
+            m_learn.metric("Still to learn", report["distinct"] - report["known_distinct"])
+            show_known = st.toggle("Show known characters too", key="report_all")
+            table = [
+                {
+                    "Character": r["char"],
+                    "Pinyin": r["pinyin"],
+                    "Times in passage": r["count"],
+                    "Status": "Known" if r["known"] else "To learn",
+                    "First taught at": r["level"] or ("not in these lists" if selections else ""),
+                }
+                for r in report["rows"]
+                if show_known or not r["known"]
+            ]
+            if table:
+                st.dataframe(table, hide_index=True, width="stretch")
+            else:
+                st.markdown(
+                    '<div class="hs-muted">Every character is known at these levels.</div>',
+                    unsafe_allow_html=True,
+                )
+            st.download_button(
+                "Download report (.csv)",
+                data=report_csv(report),
+                file_name="passage_report.csv",
+                mime="text/csv",
+            )
 
     st.markdown(
         '<div class="hs-step" style="margin-top:1.2rem">Present to the class</div>'

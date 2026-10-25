@@ -61,9 +61,11 @@ Text files may be UTF-8 or GB18030. PDFs are not supported, because text pulled
 out of a PDF is unreliable; scanned pages need to be typed or pasted. Uploads
 are limited to 5 MB and are not stored.
 
-## Passage report
+## Passage report (off by default)
 
-Under the preview, the report shows how much of the passage the class can read
+This is a niche feature, so the app hides it. Set the environment variable
+`HANZI_SOLO_REPORT=1` before `streamlit run app.py` to show it. When on, it
+sits under the preview and the report shows how much of the passage the class can read
 (counting every character, repeats included), how many different characters are
 known, and a table of the characters still to learn: pinyin (every reading, for
 characters like 行), how many times each appears, and the level that first
