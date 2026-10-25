@@ -3,3 +3,12 @@ gatherUsageStats = false
 
 [server]
 maxUploadSize = 5
+
+[theme]
+base = "light"
+primaryColor = "#B36B00"
+backgroundColor = "#F3F1EA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#141A33"
+borderColor = "#E4E0D5"
+baseRadius = "large"

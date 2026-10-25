@@ -8,7 +8,7 @@ APP = str(Path(__file__).parent.parent / "app.py")
 def test_app_runs_without_errors():
     at = AppTest.from_file(APP, default_timeout=30).run()
     assert not at.exception
-    assert at.title[0].value == "Hanzi Solo"
+    assert "<h1 class=\"hs-title\">Hanzi Solo</h1>" in at.markdown[1].value
 
 
 def test_level_selection_changes_caption():
